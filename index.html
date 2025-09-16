@@ -1,139 +1,152 @@
+ทำให้มันรองรับแบบโฟลเดอร์ด้วยเพราะบางครั้งมันเชื่อมจากไฟล์อื่นอีกจะได้ไม่ต้องเสียเวลามานั่งแก้อะ
 <!DOCTYPE html>
 <html lang="th">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>JSON UI Obfuscator</title>
-<style>
-  body { font-family: Arial, sans-serif; margin: 20px; background: #f0f0f0; }
-  textarea { width: 100%; height: 200px; margin-bottom: 10px; font-family: monospace; }
-  input, select { width: 100%; padding: 5px; margin-bottom: 10px; font-size: 14px; }
-  button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
-  pre { background: #fff; padding: 10px; border-radius: 5px; overflow-x: auto; }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JSON UI Obfuscator</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; background: #f0f0f0; }
+    textarea { width: 100%; height: 200px; margin-bottom: 10px; font-family: monospace; }
+    input, select { width: 100%; padding: 5px; margin-bottom: 10px; font-size: 14px; }
+    button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
+    pre { background: #fff; padding: 10px; border-radius: 5px; overflow-x: auto; }
+  </style>
 </head>
 <body>
-<h1>JSON UI Obfuscator</h1>
+  <h1>JSON UI Obfuscator</h1>
 
-<label>Input JSON:</label>
-<textarea id="inputJSON"></textarea>
+  <label>Input JSON:</label>
+  <textarea id="inputJSON">{ "namespace": "server_form", "hallo": { "type": "panel", "size": [32, 32] }, "hello@server_form.hallo": {}, "long_form": {}, "hellooo@hello": {}, "idk@server_form.button": {}, "test": { "type": "stack_panel", "factory": { "name": "buttons", "button": "server_form.dynamic_button", "modal": "@server_form.idk" } } }</textarea>
 
-<label>Prefix (optional):</label>
-<input type="text" id="prefix" placeholder="TEXT">
+  <label>Prefix (optional):</label>
+  <input type="text" id="prefix" placeholder="TEXT">
 
-<label>Blacklist (comma separated):</label>
-<input type="text" id="blacklist" placeholder="long_form">
+  <label>Blacklist (comma separated):</label>
+  <input type="text" id="blacklist" placeholder="long_form">
 
-<label>History (prefix+blacklist):</label>
-<select id="history" onchange="loadHistory()">
-  <option value="">-- เลือกจากประวัติ --</option>
-</select>
+  <label>History (prefix+blacklist):</label>
+  <select id="history" onchange="loadHistory()">
+    <option value="">-- เลือกจากประวัติ --</option>
+  </select>
 
-<button onclick="obfuscateJSON()">Obfuscate JSON</button>
+  <button onclick="obfuscateJSON()">Obfuscate JSON</button>
 
-<h2>Output:</h2>
-<pre id="output"></pre>
+  <h2>Output:</h2>
+  <pre id="output"></pre>
 
-<script>
-function randomName(prefix='TEXT', len=20){
-  const chars='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let out=''; for(let i=0;i<len;i++) out+=chars[Math.floor(Math.random()*chars.length)];
-  return prefix+out;
-}
-
-// Recursive obfuscator รองรับ nested keys + namespace
-function tools_4no(json, blacklist=[], prefix='TEXT'){
-  const renameMap = {};
-
-  // เก็บ key ทุกชั้น
-  function collectKeys(obj, path=[]){
-    if(typeof obj!=='object'||obj===null) return;
-    for(const key in obj){
-      if(blacklist.includes(key)) continue;
-      const fullPath=[...path,key].join('.');
-      if(!renameMap[fullPath]) renameMap[fullPath]=randomName(prefix);
-      collectKeys(obj[key],[...path,key]);
-    }
-  }
-  collectKeys(json);
-
-  // แทน key + references
-  function replaceKeys(obj, path=[]){
-    if(typeof obj!=='object'||obj===null) return obj;
-    const newObj=Array.isArray(obj)?[]:{};
-    for(const key in obj){
-      const fullPath=[...path,key].join('.');
-      const newKey=renameMap[fullPath]||key;
-      let value=obj[key];
-      if(typeof value==='object'&&value!==null){
-        value=replaceKeys(value,[...path,key]);
-      }else if(typeof value==='string'){
-        for(const [oldPath,newName] of Object.entries(renameMap)){
-          const oldPathEsc=oldPath.replace(/\./g,'\\.');
-          const re=new RegExp(`@${oldPathEsc}\\b`,'g');
-          value=value.replace(re,`@${newName}`);
-        }
+  <script>
+    // ==== Random name generator ====
+    function randomName(prefix = 'TEXT', len = 20) {
+      const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      let out = '';
+      for (let i = 0; i < len; i++) {
+        out += chars[Math.floor(Math.random() * chars.length)];
       }
-      newObj[newKey]=value;
+      return prefix + out;
     }
-    return newObj;
-  }
 
-  return replaceKeys(json);
-}
+    // ==== Obfuscator ====
+    function tools_4no(json, blacklist = [], prefix = 'TEXT') {
+      const ns = json.namespace;
+      if (!ns) throw new Error('No namespace found');
 
-// ==== LocalStorage history ====
-const HISTORY_KEY='jsonObfuscatorHistory';
+      const defined = new Set();
+      const renameMap = {};
 
-function saveHistory(prefix, blacklist){
-  const hist=JSON.parse(localStorage.getItem(HISTORY_KEY)||'[]');
-  const entry={prefix,blacklist};
-  if(!hist.some(h=>h.prefix===prefix&&h.blacklist===blacklist)){
-    hist.unshift(entry); if(hist.length>10) hist.pop();
-    localStorage.setItem(HISTORY_KEY,JSON.stringify(hist));
+      for (const key in json) {
+        if (key === 'namespace' || blacklist.includes(key)) continue;
+        const elementName = key.split('@')[0];
+        defined.add(elementName);
+      }
+
+      for (const key in json) {
+        if (key === 'namespace') continue;
+        if (key.includes('@') && !key.includes(ns + '.')) continue;
+
+        const elementName = key.split('@')[0];
+        if (!renameMap[elementName]) renameMap[elementName] = randomName(prefix);
+      }
+
+      let text = JSON.stringify(json);
+
+      for (const [oldName, newName] of Object.entries(renameMap)) {
+        if (!defined.has(oldName)) continue;
+
+        const reKey = new RegExp(`"${oldName}(@${ns}\\.[^"]+)?"`, 'g');
+        text = text.replace(reKey, (m) => m.replace(oldName, newName));
+
+        const reNs = new RegExp(`@${ns}\\.${oldName}\\b`, 'g');
+        text = text.replace(reNs, `@${ns}.${newName}`);
+
+        const reNs2 = new RegExp(`"${ns}\\.${oldName}"`, 'g');
+        text = text.replace(reNs2, `"${ns}.${newName}"`);
+
+        const reLocal = new RegExp(`@${oldName}\\b`, 'g');
+        text = text.replace(reLocal, `@${newName}`);
+      }
+
+      return JSON.parse(text);
+    }
+
+    // ==== LocalStorage history ====
+    const HISTORY_KEY = 'jsonObfuscatorHistory';
+
+    function saveHistory(prefix, blacklist) {
+      const hist = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+      const entry = { prefix, blacklist };
+      // ถ้าไม่มี entry นี้ใน history ให้เพิ่ม
+      if (!hist.some(h => h.prefix === prefix && h.blacklist === blacklist)) {
+        hist.unshift(entry);
+        if (hist.length > 10) hist.pop(); // เก็บสูงสุด 10 รายการ
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(hist));
+        loadHistoryOptions();
+      }
+    }
+
+    function loadHistoryOptions() {
+      const hist = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+      const sel = document.getElementById('history');
+      sel.innerHTML = '<option value="">-- เลือกจากประวัติ --</option>';
+      hist.forEach((h,i) => {
+        const option = document.createElement('option');
+        option.value = i;
+        option.textContent = `Prefix: ${h.prefix || '(default)'} | Blacklist: ${h.blacklist}`;
+        sel.appendChild(option);
+      });
+    }
+
+    function loadHistory() {
+      const sel = document.getElementById('history');
+      const idx = sel.value;
+      if (idx === '') return;
+      const hist = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+      const entry = hist[idx];
+      if (entry) {
+        document.getElementById('prefix').value = entry.prefix;
+        document.getElementById('blacklist').value = entry.blacklist;
+      }
+    }
+
+    // ==== Obfuscate button ====
+    function obfuscateJSON() {
+      const inputText = document.getElementById('inputJSON').value;
+      const prefix = document.getElementById('prefix').value || 'TEXT';
+      const blacklistText = document.getElementById('blacklist').value;
+      const blacklist = blacklistText.split(',').map(s => s.trim()).filter(Boolean);
+
+      try {
+        const inputJSON = JSON.parse(inputText);
+        const output = tools_4no(inputJSON, blacklist, prefix);
+        document.getElementById('output').textContent = JSON.stringify(output, null, 2);
+        saveHistory(prefix, blacklistText);
+      } catch (e) {
+        document.getElementById('output').textContent = 'Error: ' + e.message;
+      }
+    }
+
+    // โหลด history ตอนเริ่ม
     loadHistoryOptions();
-  }
-}
-
-function loadHistoryOptions(){
-  const hist=JSON.parse(localStorage.getItem(HISTORY_KEY)||'[]');
-  const sel=document.getElementById('history');
-  sel.innerHTML='<option value="">-- เลือกจากประวัติ --</option>';
-  hist.forEach((h,i)=>{
-    const option=document.createElement('option');
-    option.value=i;
-    option.textContent=`Prefix: ${h.prefix||(h.prefix===''?'(default)':'')} | Blacklist: ${h.blacklist}`;
-    sel.appendChild(option);
-  });
-}
-
-function loadHistory(){
-  const sel=document.getElementById('history'); const idx=sel.value;
-  if(idx==='') return;
-  const hist=JSON.parse(localStorage.getItem(HISTORY_KEY)||'[]'); const entry=hist[idx];
-  if(entry){
-    document.getElementById('prefix').value=entry.prefix;
-    document.getElementById('blacklist').value=entry.blacklist;
-  }
-}
-
-function obfuscateJSON(){
-  const inputText=document.getElementById('inputJSON').value;
-  const prefix=document.getElementById('prefix').value||'TEXT';
-  const blacklistText=document.getElementById('blacklist').value;
-  const blacklist=blacklistText.split(',').map(s=>s.trim()).filter(Boolean);
-  try{
-    const inputJSON=JSON.parse(inputText);
-    const output=tools_4no(inputJSON,blacklist,prefix);
-    document.getElementById('output').textContent=JSON.stringify(output,null,2);
-    saveHistory(prefix,blacklistText);
-  }catch(e){
-    document.getElementById('output').textContent='Error: '+e.message;
-  }
-}
-
-// โหลด history ตอนเริ่ม
-loadHistoryOptions();
-</script>
+  </script>
 </body>
 </html>
