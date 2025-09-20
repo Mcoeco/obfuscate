@@ -10,6 +10,8 @@
     input, select { width: 100%; padding: 5px; margin-bottom: 10px; font-size: 14px; }
     button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
     pre { background: #fff; padding: 10px; border-radius: 5px; overflow-x: auto; }
+    .prefix-options { margin-bottom: 10px; }
+    .prefix-options label { margin-right: 15px; }
   </style>
 </head>
 <body>
@@ -19,7 +21,11 @@
   <textarea id="inputJSON">{ "namespace": "server_form", "hallo": { "type": "panel", "size": [32, 32] }, "hello@server_form.hallo": {}, "long_form": {}, "hellooo@hello": {}, "idk@server_form.button": {}, "test": { "type": "stack_panel", "factory": { "name": "buttons", "button": "server_form.dynamic_button", "modal": "@server_form.idk" } } }</textarea>
 
   <label>Prefix (optional):</label>
-  <input type="text" id="prefix" placeholder="TEXT">
+  <input type="text" id="prefix" placeholder="THIS_CODE_IS_CREATED_BY_MINEBIT_STORE._DO_NOT_SELL,_TRADE_OR_MODIFY_IT_WITHOUT_PERMISSION">
+
+  <div class="prefix-options">
+    <label><input type="checkbox" id="useRandomInserts" checked> เพิ่มตัวเลขสุ่มแทรกเล็กน้อย (ทำให้ค้นหายาก แต่ยังอ่านได้)</label>
+  </div>
 
   <label>Blacklist (comma separated):</label>
   <input type="text" id="blacklist" placeholder="long_form">
@@ -35,17 +41,46 @@
   <pre id="output"></pre>
 
   <script>
-    // ==== Random name generator ====
-    function randomName(prefix = 'TEXT', len = 20) {
-      const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-      let out = '';
-      for (let i = 0; i < len; i++) {
-        out += chars[Math.floor(Math.random() * chars.length)];
+    // ==== Enhanced Prefix Generator ====
+    function obfuscatePrefix(originalPrefix) {
+      const useRandomInserts = document.getElementById('useRandomInserts').checked;
+      
+      let result = originalPrefix;
+      
+      // แค่เพิ่มตัวเลขสุ่มแทรกเล็กน้อย เพื่อไม่ให้ค้นหาเจอง่าย
+      if (useRandomInserts && result.length > 10) {
+        const insertNumbers = '0123456789';
+        const words = result.split(/[._\-]/); // แยกตามตัวคั่น
+        
+        // แทรกตัวเลขสุ่ม 1-2 ตัวในแต่ละคำ (ไม่ใช่ทุกคำ)
+        for (let i = 0; i < words.length; i++) {
+          if (words[i].length > 4 && Math.random() > 0.6) { // แทรกแค่บางคำ
+            const pos = Math.floor(words[i].length / 2); // แทรกกึ่งกลางคำ
+            const randomNum = insertNumbers[Math.floor(Math.random() * insertNumbers.length)];
+            words[i] = words[i].slice(0, pos) + randomNum + words[i].slice(pos);
+          }
+        }
+        
+        result = words.join('_'); // เชื่อมคืนด้วย _
       }
-      return prefix + out;
+      
+      return result;
     }
 
-    // ==== Obfuscator ====
+    // ==== Random name generator with obfuscated prefix ====
+    function randomName(prefix = 'TEXT', len = 20) {
+      const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      let randomSuffix = '';
+      for (let i = 0; i < len; i++) {
+        randomSuffix += chars[Math.floor(Math.random() * chars.length)];
+      }
+      
+      // ใช้ prefix ที่ถูก obfuscate แล้ว
+      const obfuscatedPrefix = obfuscatePrefix(prefix);
+      return obfuscatedPrefix + randomSuffix;
+    }
+
+    // ==== Obfuscator (unchanged) ====
     function tools_4no(json, blacklist = [], prefix = 'TEXT') {
       const ns = json.namespace;
       if (!ns) throw new Error('No namespace found');
@@ -94,10 +129,9 @@
     function saveHistory(prefix, blacklist) {
       const hist = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
       const entry = { prefix, blacklist };
-      // ถ้าไม่มี entry นี้ใน history ให้เพิ่ม
       if (!hist.some(h => h.prefix === prefix && h.blacklist === blacklist)) {
         hist.unshift(entry);
-        if (hist.length > 10) hist.pop(); // เก็บสูงสุด 10 รายการ
+        if (hist.length > 10) hist.pop();
         localStorage.setItem(HISTORY_KEY, JSON.stringify(hist));
         loadHistoryOptions();
       }
