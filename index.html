@@ -39,8 +39,60 @@
 
   <h2>Output:</h2>
   <pre id="output"></pre>
+  
+  <div id="outputActions" style="display:none; margin-top: 10px;">
+    <button onclick="copyToClipboard()" style="background: #28a745; color: white; margin-right: 10px;">📋 Copy JSON</button>
+    
+    <input type="text" id="filename" placeholder="ชื่อไฟล์" style="width: 200px; display: inline-block; margin-right: 10px;" value="obfuscated.json">
+    <button onclick="downloadJSON()" style="background: #007bff; color: white;">💾 Download JSON</button>
+  </div>
 
   <script>
+    // ==== Copy and Download Functions ====
+    let currentOutput = null;
+    
+    function copyToClipboard() {
+      if (!currentOutput) {
+        alert('ไม่มี JSON ให้คัดลอก');
+        return;
+      }
+      
+      navigator.clipboard.writeText(JSON.stringify(currentOutput, null, 2)).then(() => {
+        alert('คัดลอก JSON เรียบร้อยแล้ว! 📋');
+      }).catch(err => {
+        // Fallback สำหรับเบราว์เซอร์เก่า
+        const textArea = document.createElement('textarea');
+        textArea.value = JSON.stringify(currentOutput, null, 2);
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        alert('คัดลอก JSON เรียบร้อยแล้ว! 📋');
+      });
+    }
+    
+    function downloadJSON() {
+      if (!currentOutput) {
+        alert('ไม่มี JSON ให้ดาวน์โหลด');
+        return;
+      }
+      
+      const filename = document.getElementById('filename').value || 'obfuscated.json';
+      const jsonString = JSON.stringify(currentOutput, null, 2);
+      const blob = new Blob([jsonString], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename.endsWith('.json') ? filename : filename + '.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      alert(`ดาวน์โหลดไฟล์ ${a.download} เรียบร้อยแล้ว! 💾`);
+    }
+
     // ==== Enhanced Prefix Generator ====
     function obfuscatePrefix(originalPrefix) {
       const useRandomInserts = document.getElementById('useRandomInserts').checked;
@@ -171,10 +223,20 @@
       try {
         const inputJSON = JSON.parse(inputText);
         const output = tools_4no(inputJSON, blacklist, prefix);
+        
+        // เก็บผลลัพธ์ไว้ใช้ copy/download
+        currentOutput = output;
+        
         document.getElementById('output').textContent = JSON.stringify(output, null, 2);
+        
+        // แสดงปุ่ม copy และ download
+        document.getElementById('outputActions').style.display = 'block';
+        
         saveHistory(prefix, blacklistText);
       } catch (e) {
         document.getElementById('output').textContent = 'Error: ' + e.message;
+        document.getElementById('outputActions').style.display = 'none';
+        currentOutput = null;
       }
     }
 
